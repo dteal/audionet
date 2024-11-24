@@ -33,12 +33,6 @@ LOG_OFFSET = 0.01  # Offset used for stabilized log of input mel-spectrogram.
 EXAMPLE_WINDOW_SECONDS = 0.96  # Each example contains 96 10ms frames
 EXAMPLE_HOP_SECONDS = 0.96  # with zero overlap.
 
-# Parameters used for embedding postprocessing.
-PCA_EIGEN_VECTORS_NAME = "pca_eigen_vectors"
-PCA_MEANS_NAME = "pca_means"
-QUANTIZE_MIN_VAL = -2.0
-QUANTIZE_MAX_VAL = +2.0
-
 # Hyperparameters used in training.
 INIT_STDDEV = 0.01  # Standard deviation used to initialize weights.
 LEARNING_RATE = 1e-4  # Learning rate for the Adam optimizer.

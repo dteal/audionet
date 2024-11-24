@@ -1,5 +1,6 @@
 import tensorflow.compat.v1 as tf
 import tf_slim as slim
+import numpy as np
 
 import audionet.params as params
 
@@ -103,3 +104,29 @@ def load_slim_checkpoint(session, checkpoint_path):
     # Use a Saver to restore just the variables selected above.
     saver = tf.train.Saver(vggish_vars, name="vggish_load_pretrained", write_version=1)
     saver.restore(session, checkpoint_path)
+
+
+def initialize_uniform_weights(session, low=-0.1, high=0.1):
+    # Get all VGGish variables in the current graph
+    vggish_vars = [v for v in tf.global_variables() if v.name.startswith("vggish/")]
+
+    # Create initialization operations
+    init_ops = []
+    for var in vggish_vars:
+        # Get the shape of the variable
+        shape = var.get_shape().as_list()
+
+        # Create uniform random values
+        if "weights" in var.name or "kernel" in var.name:
+            # For weight matrices/kernels
+            init_value = np.random.uniform(low=low, high=high, size=shape)
+        else:
+            # For biases, initialize to small constant or zero
+            init_value = np.zeros(shape)
+
+        # Create and add the assignment operation
+        init_op = var.assign(init_value)
+        init_ops.append(init_op)
+
+    # Run all initialization operations
+    session.run(init_ops)

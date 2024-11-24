@@ -65,6 +65,11 @@ FLAGS = flags.FLAGS
 
 _NUM_CLASSES = 2
 
+save_frequency = 10
+
+
+tf.disable_eager_execution()
+
 
 def _get_examples_batch():
     """Returns a shuffled batch of examples of all audio classes.
@@ -112,6 +117,7 @@ def _get_examples_batch():
 
 def main(_):
     with tf.Graph().as_default(), tf.Session() as sess:
+        saver = tf.train.Saver(max_to_keep=5)
         # Define VGGish.
         embeddings = audio_slim.define_slim(training=FLAGS.train_vggish)
 
@@ -157,17 +163,24 @@ def main(_):
         # Initialize all variables in the model, and then load the pre-trained
         # checkpoint.
         sess.run(tf.global_variables_initializer())
-        audio_slim.load_slim_checkpoint(sess, FLAGS.checkpoint)
+        # audio_slim.load_slim_checkpoint(sess, FLAGS.checkpoint)
+        audio_slim.initialize_uniform_weights(sess)
 
         # The training loop.
         features_input = sess.graph.get_tensor_by_name(params.INPUT_TENSOR_NAME)
-        for _ in range(FLAGS.num_batches):
+        for epoch in range(FLAGS.num_batches):
             (features, labels) = _get_examples_batch()
             [num_steps, loss_value, _] = sess.run(
                 [global_step, loss, train_op],
                 feed_dict={features_input: features, labels_input: labels},
             )
             print("Step %d: loss %g" % (num_steps, loss_value))
+            # Save every N epochs
+            if epoch % save_frequency == 0:
+                save_path = saver.save(
+                    sess, "path/to/checkpoints/model.ckpt", global_step=epoch
+                )
+                print(f"Model checkpoint saved at epoch {epoch}: {save_path}")
 
 
 if __name__ == "__main__":
