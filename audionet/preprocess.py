@@ -241,7 +241,7 @@ def generate_something_like_mfcc(samples, desired_feature_vector_size = 128):
     frequency_bins = np.linspace(min_frequency, max_frequency, len(fft))
 
     # now, take the absolute value
-    fft = np.abs(fft)
+    fft = np.abs(fft+0.01)
 
     # take moving average
     moving_average_size = math.ceil(len(fft)/desired_feature_vector_size)
@@ -249,7 +249,7 @@ def generate_something_like_mfcc(samples, desired_feature_vector_size = 128):
     averaged = np.convolve(fft, np.ones(moving_average_size), mode='same')/moving_average_size
 
     # take logarithm
-    logged = np.log(averaged)
+    logged = np.log(averaged+0.01) # offset from zero so there isn't a log(0) error
 
     # now sample at fixed points
     binned = sig.resample(logged, desired_feature_vector_size)
