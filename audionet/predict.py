@@ -72,6 +72,7 @@ if __name__ == "__main__":
     # Load the audio file
     audio, sr = librosa.load(audio_file_path, sr=SAMPLE_RATE)
 
+    breakpoint()
     # Ensure the audio is exactly 1 second long
     if len(audio) > SAMPLE_RATE:
         audio = audio[:SAMPLE_RATE]
