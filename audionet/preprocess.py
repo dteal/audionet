@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
 
+# Functions to:
+# - open and parse wave files
+# - resample/change audio sample frequency/length
+# - create feature vectors from audio samples
+
 import math
 import sys
 import os
@@ -8,21 +13,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy.signal as sig
 import random
-
 from pathlib import Path
 from typing import List
 
-sys.path.append(os.getcwd() + '/..')
-#sys.path.append(os.getcwd() + '/../../..')
-#sys.path.append(os.getcwd() + '/../..')
+sys.path.append(os.getcwd() + '/..') # hack
 from audionet import params
-
 
 ############################################################
 # SAMPLING CODE
 # (get audio from wave file, resample to right frequency/length, etc)
 ############################################################
-
 
 # open a single wave file and convert to numpy array in [-1,1]
 # HOWEVER: IS NOT RESAMPLED TO PROPER TIME PERIOD OR LENGTH YET
@@ -112,8 +112,7 @@ def adjust_num_samples(original_samples, desired_num_samples):
         new_samples[cur_samples:-1] = original_samples[0:desired_num_samples-cur_samples-1]
         return new_samples
 
-
-def test_sampling():
+def test_resampling():
 
     # input wave file
     wav_samples, wav_sample_rate = wav_to_raw_data("sample_sound.wav")
@@ -131,6 +130,7 @@ def test_sampling():
     resample_times = np.linspace(0, (len(resample_samples)-1.0)/resample_sample_rate, len(resample_samples))
     length_times = np.linspace(0, (len(length_samples)-1.0)/resample_sample_rate, len(length_samples))
 
+    # should be three graphs, and the data should line up
     plt.plot(wav_times, wav_samples, label='original')
     plt.plot(resample_times, resample_samples, label='resampled')
     plt.plot(length_times, length_samples, ':', label='length')
@@ -139,85 +139,22 @@ def test_sampling():
     plt.legend()
     plt.show()
 
-
 ############################################################
-# FEATURE VECTOR GENERATION
-# (transform wave file to features, run tests, etc)
+# UTILITY FUNCTIONS
 ############################################################
-
 
 def get_samples_from_wav(filename):
+    """Open wav file, get sound samples, adjusted to desired sample rate and length"""
     wav_samples, wav_sample_rate = wav_to_raw_data(filename)
     resample_samples, _ = resample_data(wav_samples, wav_sample_rate, params.SAMPLE_RATE)
     length_samples = adjust_num_samples(resample_samples, params.SAMPLE_PERIOD*params.SAMPLE_RATE)
     return length_samples
 
-def generate_mfcc(samples):
-    pass
-    # output: 1D np array
-
-def generate_nothing(samples):
-    return samples
-
-def generate_fft(samples):
-    print(samples)
-    print("sample rate: {} Hz".format(params.SAMPLE_RATE))
-    print("sample_period: {} s".format(params.SAMPLE_PERIOD))
-    fft = np.fft.fft(samples)
-    fft = fft[:int(len(samples)/2)]
-    min_frequency = 1/params.SAMPLE_PERIOD # min frequency, Hz
-    max_frequency = params.SAMPLE
-    print("min frequency: {} Hz".format(min_frequency))
-    print("max frequency: {} Hz".format(min_frequency))
-    #freqs = np.logspace(0,
-
-    plt.plot(fft)
-    plt.show()
-    return fft
-
-def generate_something_like_mfcc(samples):
-    print(samples)
-    fft = np.fft.fft(samples)
-    num_fft_bins = len(fft)
-    fft = fft[:int(num_fft_bins/2)]
-
-    fft = np.abs(fft)
-
-    # take moving average
-    #feature_vec_size = 128
-    #bin_size = math.floor(len(fft)/feature_vec_size)
-    bin_size = 100
-    averaged = np.convolve(fft, np.ones(bin_size), mode='valid')/bin_size
-    #print(len(averaged))
-
-    #hist = np.histogram(fft, bins=200)
-    #plt.plot(np.log(averaged))
-    #plt.plot(hist[0])
-    #plt.show()
-    return averaged
-
-def generate_closer_to_mfcc(samples):
-    predct = generate_something_like_mfcc(samples)
-    timedomain = np.fft.fft(predct)
-    return timedomain
-
-# samples - 1D np array
-
-def generate_spectrogram(samples):
-    params.SAMPLE_RATE # Hz
-    params.SAMPLE_PERIOD # s
-
-    pass
-    # output - 2D np array
-
-
-def test():
-
-    samples = get_samples_from_wav('sample_sound.wav')
-    #generate_fft(samples)
-    generate_something_like_mfcc(samples)
-    pass
-
+def normalize_bounds(samples):
+    """Adjust/normalize magnitude of samples to fit range [0, 1]"""
+    smin = np.min(samples)
+    smax = np.max(samples)
+    return (samples-smin)/(smax-smin)
 
 def get_wav_files(directory: str):
     """
@@ -252,25 +189,85 @@ def get_wav_files(directory: str):
     except PermissionError:
         raise PermissionError(f"Permission denied accessing directory: {directory}")
 
-def rescale_to_bounds(input_vec):
-    vmin = np.min(input_vec)
-    vmax = np.max(input_vec)
-    return (input_vec-vmin)/(vmax-vmin)
+############################################################
+# FEATURE VECTOR GENERATION
+# (transform wave file to features, run tests, etc)
+############################################################
+
+# assorted functions to process samples into feature vectors
+
+def generate_nothing(samples):
+    """The simplest feature vector: just return raw audio data. Not very useful."""
+    return samples
+
+def generate_fft(samples):
+    """Take FFT (and nothing else so far)"""
+    #print(samples)
+    #print("sample rate: {} Hz".format(params.SAMPLE_RATE))
+    #print("sample_period: {} s".format(params.SAMPLE_PERIOD))
+
+    fft = np.fft.fft(samples)
+    num_fft_points = params.SAMPLE_PERIOD*params.SAMPLE_RATE
+    # fft[0] is DC signal; there shouldn't be any for audio, remove it
+    # fft[1] is params.SAMPLE_RATE/num_fft_points
+    # fft[floor(num_fft_points/2-1)] = just below nyquist
+    fft = fft[1:math.floor(num_fft_points/2-1)]
+    min_frequency = params.SAMPLE_RATE/num_fft_points
+    max_frequency = params.SAMPLE_RATE/2 # might be fencepost error but whatever
+    frequency_bins = np.linspace(min_frequency, max_frequency, len(fft))
+
+    #plt.plot(fft)
+    #plt.xlabel("Frequency (Hz)")
+    #plt.ylabel("Amplitude (-)")
+    #plt.show()
+    print(len(fft))
+
+    # length of output vector is (original number of samples/2)-2
+    return fft
+
+def generate_something_like_mfcc(samples, desired_feature_vector_size = 128):
+    """This is our best attempt at a feature vector."""
+    # desired_feature_vector_size = 128 seems to contain a good amount of info (see plots)
+
+    # first take fft
+    fft = np.fft.fft(samples)
+    num_fft_points = params.SAMPLE_PERIOD*params.SAMPLE_RATE
+    # fft[0] is DC signal; there shouldn't be any for audio, remove it
+    # fft[1] is params.SAMPLE_RATE/num_fft_points
+    # fft[floor(num_fft_points/2-1)] = just below nyquist
+    fft = fft[1:math.floor(num_fft_points/2-1)]
+    min_frequency = params.SAMPLE_RATE/num_fft_points
+    max_frequency = params.SAMPLE_RATE/2 # might be fencepost error but whatever
+    frequency_bins = np.linspace(min_frequency, max_frequency, len(fft))
+
+    # now, take the absolute value
+    fft = np.abs(fft)
+
+    # take moving average
+    moving_average_size = math.ceil(len(fft)/desired_feature_vector_size)
+    #averaged = np.convolve(fft, np.ones(moving_average_size), mode='valid')/moving_average_size
+    averaged = np.convolve(fft, np.ones(moving_average_size), mode='same')/moving_average_size
+
+    # take logarithm
+    logged = np.log(averaged)
+
+    # now sample at fixed points
+    binned = sig.resample(logged, desired_feature_vector_size)
+    new_frequency_bins = np.linspace(min_frequency, max_frequency, len(binned))
+
+    # finally, normalize to [0, 1]
+    rescaled = normalize_bounds(binned)
+
+    #plt.plot(new_frequency_bins, rescaled)
+    #plt.xlabel("Frequency (Hz)")
+    #plt.ylabel("Amplitude (-)")
+    #plt.show()
+
+    #print(len(rescaled)) # should be desired_feature_vector_size
+    return rescaled
 
 def test_vectors_with_humans():
-    """Returns a shuffled batch of examples of all audio classes.
-
-    Note that this is just a toy function because this is a simple demo intended
-    to illustrate how the training code might work.
-
-    Returns:
-      a tuple (features, labels) where features is a NumPy array of shape
-      [batch_size, num_frames, num_bands] where the batch_size is variable and
-      each row is a log mel spectrogram patch of shape [num_frames, num_bands]
-      suitable for feeding VGGish, while labels is a NumPy array of shape
-      [batch_size, num_classes] where each row is a multi-hot label vector that
-      provides the labels for corresponding rows in features.
-    """
+    """Displays feature vectors of random files to see if humans can tell the difference between drone / no drone"""
 
     yes_drone_files = get_wav_files("../data/drone_audio_dataset/Binary_Drone_Audio/yes_drone")
     no_drone_files = get_wav_files("../data/drone_audio_dataset/Binary_Drone_Audio/unknown")
@@ -279,23 +276,28 @@ def test_vectors_with_humans():
     for x in [0,1]:
         for y in range(4):
             samples = get_samples_from_wav(random.choice(yes_drone_files))
-            #data = generate_something_like_mfcc(samples)
-            data = generate_nothing(samples)
-            #data = generate_closer_to_mfcc(samples)
-            axs[x,y].plot(rescale_to_bounds(data[150:]), 'k')
+            features = generate_something_like_mfcc(samples)
+            #features = generate_nothing(samples)
+            axs[x,y].plot(features, 'red')
             axs[x,y].set_title("yes drone")
     for x in [2,3]:
         for y in range(4):
             samples = get_samples_from_wav(random.choice(no_drone_files))
-            #data = generate_something_like_mfcc(samples)
-            data = generate_nothing(samples)
-            #data = generate_closer_to_mfcc(samples)
-            axs[x,y].plot(rescale_to_bounds(data[150:]))
+            features = generate_something_like_mfcc(samples)
+            #features = generate_nothing(samples)
+            axs[x,y].plot(features, 'blue')
             axs[x,y].set_title("no drone")
     plt.show()
 
 if __name__=='__main__':
-    #test_sampling()
-    #test()
+
+    # confirm resampling functions work right
+    #test_resampling()
+
+    # confirm feature vector algorithm looks good
+    #samples = get_samples_from_wav('sample_sound.wav')
+    #generate_something_like_mfcc(samples, 128)
+
+    # check if everything works well
     test_vectors_with_humans()
 
