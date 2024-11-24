@@ -29,16 +29,17 @@ class AudioChart:
         fig, axs = plt.subplots(1, 2)
         (self.line1,) = axs[0].plot([], [], "red")
         axs[0].set_title("Raw Data")
-        (self.line2,) = axs[1].plot([], [], "blue")
-        axs[1].set_title("Processed Data")
+        #(self.line2,) = axs[1].plot([], [], "blue")
+        #axs[1].set_title("Processed Data")
 
         self.line1.set_data([], [])
-        self.line2.set_data([], [])
+        #self.line2.set_data([], [])
 
-    def update(self, data, processed_data):
+    #def update(self, data, processed_data):
+    def update(self, data):
         x = range(len(data))
         self.line1.set_data(x, data)
-        self.line2.set_data(x, processed_data)
+        #self.line2.set_data(x, processed_data)
 
 
 class AudioSensorState:
@@ -50,12 +51,18 @@ class AudioSensorState:
         )
         self.pya = None  # pyaudio instance
         self.stream = None  # pyaudio stream from microphone
+        # circular buffer containing raw microphone data
+        self.current_raw_samples = [] #np.ones(self.mic_sample_rate*self.desired_sample_period)
+        self.current_raw_sample_position = 0; # index of oldest data in circular buffer (insert new data here)
+        self.current_features = [] # processed data, ready to be sent to ML model
+        self.previous_sampling_time = time.time()
+        self.previous_notification_time = time.time()
 
     #################################################
     # AUDIO INPUT
     #################################################
 
-    def initialize_audio(self):
+    def initialize_audio(self, buffer_length = 16000): # buffer length is approx. the number of samples desired
         """Set up audio stream."""
 
         print("Initializing audio stream...")
@@ -94,7 +101,7 @@ class AudioSensorState:
         for rate in [self.mic_sample_rate]:
             try:
                 # rate_works = self.pya.is_format_supported(rate=rate, input_device=dev_number, input_channels=1, input_format=pyaudio.paInt16)
-                mic_sample_rate = rate
+                self.mic_sample_rate = rate
                 break
             except ValueError:
                 print("invalid sample rate")
@@ -103,7 +110,8 @@ class AudioSensorState:
         # (continuously feed data into this buffer, then
         # extract detection_period worth of data when ready)
 
-        mic_samples_per_period = mic_sample_rate * self.desired_sample_period
+        mic_samples_per_period = self.mic_sample_rate*self.desired_sample_period
+        self.current_raw_samples = np.ones(mic_samples_per_period)
 
         # data_buffer = np.zeros(samples_per_period)
 
@@ -117,11 +125,12 @@ class AudioSensorState:
             # input_device_index = dev_number, # don't specify this; use default input device
             channels=1,
             rate=self.mic_sample_rate,
-            frames_per_buffer=2
-            * mic_samples_per_period,  # buffer at least this many samples
+            #frames_per_buffer=2 * mic_samples_per_period,  # buffer at least this many samples
+            frames_per_buffer=buffer_length,#2 * mic_samples_per_period,  # buffer at least this many samples
             input=True,
         )
 
+        # frames_per_buffer doesn't exactly correlate with number of frames in the buffer?:
         # 1 -> 191 (1024 bytes
         # 1 -> 191
         # 2 -> 191
@@ -137,16 +146,70 @@ class AudioSensorState:
 
     def sample_and_process_data(self):
         """Get audio sample, process, run model."""
-        print("---")
-        # print(self.stream.is_active())
-        print(time.time())
-        num_available = self.stream.get_read_available()
-        print(num_available)
 
-        fig, axs = plt.subplots(1, 2)
-        data = self.stream.read(num_available)
-        print("read {} bytes".format(len(data)))
-        return data
+        current_time = time.time()
+        time_since_last_sample = current_time - self.previous_sampling_time
+        self.previous_sampling_time = current_time
+        ideal_num_samples_since_last = self.mic_sample_rate*time_since_last_sample
+
+        # we need to assemble a sample of this much data
+        desired_num_samples = self.mic_sample_rate * self.desired_sample_period
+
+        # get new data
+        new_data_available = self.stream.get_read_available() # number of samples available
+        new_data_bytes = self.stream.read(new_data_available) # actual data
+        # new_data is a bytes object with 2-byte values
+        # convert set of two bytes to float in [-1,1]
+        new_data = [int.from_bytes(new_data_bytes[2*i:2*i+2], byteorder='little', signed=True)/32768.0
+            for i in range(new_data_available)]
+        new_data = np.array(new_data)
+
+        if len(new_data) > 0 and len(new_data) < self.mic_sample_rate*self.desired_sample_period and len(new_data) < ideal_num_samples_since_last:
+            print('not enough data; need to make buffer longer!')
+        if len(new_data) > desired_num_samples:
+            new_data = new_data[0:desired_num_samples]
+            #print("new_data too long, cropping to {} (should equal {})".format(len(new_data), desired_num_samples))
+        if len(new_data) == 0:
+            print('data ok but make buffer shorter for faster response')
+            return
+
+        #print("new data length: {}".format(len(new_data)))
+        #print("current_pos: {}".format(self.current_raw_sample_position))
+
+        # put new data into circular buffer
+        space_at_end_of_buffer = desired_num_samples - self.current_raw_sample_position
+        #print(space_at_end_of_buffer)
+        if space_at_end_of_buffer >= len(new_data):
+            #print("filling without circular")
+            self.current_raw_samples[self.current_raw_sample_position:self.current_raw_sample_position
+                +len(new_data)] = new_data
+            self.current_raw_sample_position = self.current_raw_sample_position + len(new_data)
+        else:
+            #print("filling with circular")
+            self.current_raw_samples[self.current_raw_sample_position:] = new_data[0:space_at_end_of_buffer]
+            self.current_raw_samples[0:len(new_data)-space_at_end_of_buffer] = new_data[space_at_end_of_buffer:]
+            self.current_raw_sample_position = len(new_data)-space_at_end_of_buffer
+        if self.current_raw_sample_position > desired_num_samples-1:
+            self.current_raw_sample_position -= desired_num_samples
+
+        #self.current_raw_samples = np.ones(self.mic_sample_rate*self.desired_sample_period)
+        #self.current_raw_sample_position = 0; # index of oldest data in circular buffer (insert new data here)
+        #self.current_features = [] # processed data, ready to be sent to ML model
+        #self.desired_sample_rate = params.SAMPLE_RATE  # (Hz) sample rate we want
+        #self.desired_sample_period = params.SAMPLE_PERIOD  # (s) total sampling time
+
+        final_data = np.concatenate((self.current_raw_samples[self.current_raw_sample_position:], self.current_raw_samples[0:self.current_raw_sample_position]))
+        #print(len(final_data))
+        #print(final_data)
+
+        # reformat sample
+        resample_samples, _ = preprocess.resample_data(final_data, self.mic_sample_rate, params.SAMPLE_RATE)
+        length_samples = preprocess.adjust_num_samples(resample_samples, params.SAMPLE_PERIOD*params.SAMPLE_RATE)
+        self.current_features = preprocess.generate_something_like_mfcc(length_samples, 128)
+
+        if current_time - self.previous_notification_time > 1: # notifications at least 1 second apart
+            print("Running detection {:.3} times per second".format(1/time_since_last_sample))
+            self.previous_notification_time = current_time
 
     def send_data_to_server(self):
         """Send data to server."""
@@ -155,16 +218,14 @@ class AudioSensorState:
     def run(self):
         self.sample_and_process_data()
         self.send_data_to_server()
-        time.sleep(1)  # TODO remove
-
+        time.sleep(0.05)  # TODO remove
 
 if __name__ == "__main__":
     chart = AudioChart()
     state = AudioSensorState()
-    state.initialize_audio()
+    state.initialize_audio(buffer_length=8000)
     state.initialize_server()
     print("Running...")
     while True:
-        data = state.run()
-        processed_data = preprocess.generate_something_like_mfcc(data)
-        chart.update(data, processed_data)
+        state.run()
+        #chart.update(state.current_features)
