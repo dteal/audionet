@@ -1,6 +1,8 @@
 .env
 .envrc
 
+.direnv
+.direnv/*
 __pycache__
 __pycache__/
 *.ckpt

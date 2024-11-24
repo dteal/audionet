@@ -68,8 +68,36 @@
           buildInputs = with pkgs; [cudaPackages.cudatoolkit libGLU libGL cudaPackages.cudnn cudaPackages.nccl linuxPackages.nvidia_x11] ++ (old.buildInputs or [ ]);
         });
 
+
+        tbbpool = prev.tbbpool.overrideAttrs (old:  {
+          buildInputs = with pkgs; [tbb gcc ] ++ (old.buildInputs or [ ]);
+          nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ pkgs.autoPatchelfHook ];
+          autoPatchelfExtraLibDirs = [ "${pkgs.tbb}/lib" ];
+        });
+
         numba = prev.numba.overrideAttrs (old:  {
-          buildInputs = with pkgs; [tbb cudaPackages.cudatoolkit libGLU libGL cudaPackages.cudnn cudaPackages.nccl linuxPackages.nvidia_x11] ++ (old.buildInputs or [ ]);
+          buildInputs = with pkgs; [tbb gcc 
+            llvmPackages_14.llvm
+            llvmPackages_14.libclang
+          ] ++ (old.buildInputs or [ ]);
+          nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ 
+            pkgs.autoPatchelfHook
+            pkgs.llvmPackages_14.libclang
+          ];
+          autoPatchelfExtraLibs = [ "${pkgs.tbb}/lib" ];
+          autoPatchelfIgnoreMissingDeps = [ "libtbb.so.12" ];
+          postFixup = ''
+            find ${pkgs.tbb}/lib -name "libtbb*" -exec file {} \;
+            patchelf --set-rpath "${pkgs.lib.makeLibraryPath ([
+              pkgs.tbb
+            ] ++ (old.buildInputs or []))}" \
+            $out/lib/python*/site-packages/numba/np/ufunc/tbbpool.cpython-*-linux-gnu.so
+          '';
+        });
+
+
+        pyaudio = prev.pyaudio.overrideAttrs (old:  {
+          buildInputs = with pkgs; [ portaudio ] ++ (old.buildInputs or [ ]);
         });
 
 
@@ -154,6 +182,8 @@
               libGLU libGL
               xorg.libXi xorg.libXmu freeglut
               xorg.libXext xorg.libX11 xorg.libXv xorg.libXrandr zlib 
+              cudaPackages.cudnn
+              cudaPackages.nccl
               pyright
             ] ++ [ virtualenv ];
           in
@@ -163,6 +193,7 @@
             shellHook = ''
               # Undo dependency propagation by nixpkgs.
               unset PYTHONPATH
+              export CUDA_PATH=${pkgs.cudatoolkit}
               # Get repository root using git. This is expanded at runtime by the editable `.pth` machinery.
               export REPO_ROOT=$(git rev-parse --show-toplevel)
               export LD_LIBRARY_PATH=${pkgs.cudatoolkit}/lib:/run/opengl-driver/lib:$LD_LIBRARY_PATH:${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.lib.makeLibraryPath myBuildInputs}
