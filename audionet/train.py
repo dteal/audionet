@@ -39,6 +39,43 @@ import tf_slim as slim
 import audionet.preprocess.input as input
 import audionet.params as params
 import audionet.preprocess.slim as audio_slim
+from pathlib import Path
+from typing import List
+
+
+def get_wav_files(directory: str) -> List[str]:
+    """
+    Get all .wav files from the specified directory.
+
+    Args:
+        directory (str): Path to the directory containing .wav files
+
+    Returns:
+        List[str]: List of .wav file paths
+
+    Raises:
+        FileNotFoundError: If the directory doesn't exist
+        PermissionError: If there's no permission to access the directory
+    """
+    try:
+        # Convert to Path object for better cross-platform compatibility
+        path = Path(directory)
+
+        # Verify directory exists
+        if not path.exists():
+            raise FileNotFoundError(f"Directory not found: {directory}")
+
+        # Get all .wav files
+        wav_files = [str(f) for f in path.glob("*.wav")]
+
+        # Sort for consistent ordering
+        wav_files.sort()
+
+        return wav_files
+
+    except PermissionError:
+        raise PermissionError(f"Permission denied accessing directory: {directory}")
+
 
 flags = tf.app.flags
 
@@ -87,7 +124,7 @@ def _get_examples_batch():
     """
     sr = 44100  # Sampling rate.
 
-    drone_files = ["a_file.wav", "another_file.wav"]
+    drone_files = get_wav_files("data/drone_audio_dataset/Binary_Drone_Audio/yes_drone")
     drone_examples = np.array([])
     for drone_file in drone_files:
         drone_examples = np.concatenate(
@@ -95,7 +132,9 @@ def _get_examples_batch():
         )
     drone_labels = np.array([[0, 1]] * drone_examples.shape[0])
 
-    no_drone_files = ["a_file.wav", "another_file.wav"]
+    no_drone_files = get_wav_files(
+        "data/drone_audio_dataset/Binary_Drone_Audio/unknown"
+    )
     no_drone_examples = np.array([])
     for no_drone_file in no_drone_files:
         no_drone_examples = np.concatenate(
