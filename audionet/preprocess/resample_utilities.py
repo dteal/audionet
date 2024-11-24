@@ -96,14 +96,12 @@ def adjust_num_samples(original_samples, desired_num_samples):
 
 def test_sampling():
 
+    # input wave file
     wav_samples, wav_sample_rate = wav_to_raw_data("sample_sound.wav")
 
-    print('test')
     # resample frequency
     resample_sample_rate = 8000 # (Hz) test frequency to resample to
     resample_samples, resample_sample_rate = resample_data(wav_samples, wav_sample_rate, resample_sample_rate)
-
-    print('test')
 
     # change length
     desired_length = 5 # (seconds) total length
