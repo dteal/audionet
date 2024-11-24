@@ -7,6 +7,10 @@ import wave
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.signal as sig
+import random
+
+from pathlib import Path
+from typing import List
 
 sys.path.append(os.getcwd() + '/..')
 #sys.path.append(os.getcwd() + '/../../..')
@@ -152,6 +156,8 @@ def generate_mfcc(samples):
     pass
     # output: 1D np array
 
+def generate_nothing(samples):
+    return samples
 
 def generate_fft(samples):
     print(samples)
@@ -182,13 +188,18 @@ def generate_something_like_mfcc(samples):
     #bin_size = math.floor(len(fft)/feature_vec_size)
     bin_size = 100
     averaged = np.convolve(fft, np.ones(bin_size), mode='valid')/bin_size
-    print(len(averaged))
+    #print(len(averaged))
 
     #hist = np.histogram(fft, bins=200)
-    plt.plot(np.log(averaged))
+    #plt.plot(np.log(averaged))
     #plt.plot(hist[0])
-    plt.show()
-    return fft
+    #plt.show()
+    return averaged
+
+def generate_closer_to_mfcc(samples):
+    predct = generate_something_like_mfcc(samples)
+    timedomain = np.fft.fft(predct)
+    return timedomain
 
 # samples - 1D np array
 
@@ -207,7 +218,84 @@ def test():
     generate_something_like_mfcc(samples)
     pass
 
+
+def get_wav_files(directory: str):
+    """
+    Get all .wav files from the specified directory.
+
+    Args:
+        directory (str): Path to the directory containing .wav files
+
+    Returns:
+        List[str]: List of .wav file paths
+
+    Raises:
+        FileNotFoundError: If the directory doesn't exist
+        PermissionError: If there's no permission to access the directory
+    """
+    try:
+        # Convert to Path object for better cross-platform compatibility
+        path = Path(directory)
+
+        # Verify directory exists
+        if not path.exists():
+            raise FileNotFoundError(f"Directory not found: {directory}")
+
+        # Get all .wav files
+        wav_files = [str(f) for f in path.glob("*.wav")]
+
+        # Sort for consistent ordering
+        wav_files.sort()
+
+        return wav_files
+
+    except PermissionError:
+        raise PermissionError(f"Permission denied accessing directory: {directory}")
+
+def rescale_to_bounds(input_vec):
+    vmin = np.min(input_vec)
+    vmax = np.max(input_vec)
+    return (input_vec-vmin)/(vmax-vmin)
+
+def test_vectors_with_humans():
+    """Returns a shuffled batch of examples of all audio classes.
+
+    Note that this is just a toy function because this is a simple demo intended
+    to illustrate how the training code might work.
+
+    Returns:
+      a tuple (features, labels) where features is a NumPy array of shape
+      [batch_size, num_frames, num_bands] where the batch_size is variable and
+      each row is a log mel spectrogram patch of shape [num_frames, num_bands]
+      suitable for feeding VGGish, while labels is a NumPy array of shape
+      [batch_size, num_classes] where each row is a multi-hot label vector that
+      provides the labels for corresponding rows in features.
+    """
+
+    yes_drone_files = get_wav_files("../data/drone_audio_dataset/Binary_Drone_Audio/yes_drone")
+    no_drone_files = get_wav_files("../data/drone_audio_dataset/Binary_Drone_Audio/unknown")
+
+    fig, axs = plt.subplots(4, 4)
+    for x in [0,1]:
+        for y in range(4):
+            samples = get_samples_from_wav(random.choice(yes_drone_files))
+            #data = generate_something_like_mfcc(samples)
+            data = generate_nothing(samples)
+            #data = generate_closer_to_mfcc(samples)
+            axs[x,y].plot(rescale_to_bounds(data[150:]), 'k')
+            axs[x,y].set_title("yes drone")
+    for x in [2,3]:
+        for y in range(4):
+            samples = get_samples_from_wav(random.choice(no_drone_files))
+            #data = generate_something_like_mfcc(samples)
+            data = generate_nothing(samples)
+            #data = generate_closer_to_mfcc(samples)
+            axs[x,y].plot(rescale_to_bounds(data[150:]))
+            axs[x,y].set_title("no drone")
+    plt.show()
+
 if __name__=='__main__':
-    test_sampling()
-    test()
+    #test_sampling()
+    #test()
+    test_vectors_with_humans()
 
