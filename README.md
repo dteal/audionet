@@ -60,3 +60,17 @@ A battery would need ~13kJ=3.6Wh of storage to run the sensor per day. A single 
 
 We can get more power with solar. A standard solar cell can provide ~50W/m^2 average per day, so a 60x60mm solar cell is enough to power the sensor continuously (assuming enough battery storage to last overnight).
 
+# Results
+
+To detect drones, we run audio samples through a custom convolutional neural network.
+
+Audio is sampled at 16kHz. Features are extracted as [MFCC](https://en.wikipedia.org/wiki/Mel-frequency_cepstrum) vectors (slightly more than an FFT). The CNN is trained on the DroneAudioDataset <https://github.com/saraalemadi/DroneAudioDataset>.
+
+![features extracted from audio dataset](media/yesno.png)
+
+We built a real-time data viewer that displays probabilities output from any number of sensors:
+
+https://github.com/robonafisi/drone-detection-viewer
+
+![website interface](media/viewer.jpg)
+
