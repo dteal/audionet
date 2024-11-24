@@ -8,7 +8,8 @@
 # to the following format before further processing:
 
 # Make a numpy array of 32-bit floats (the amplitude of sound
-# at each point) of length SAMPLE_RATE * SAMPLE_PERIOD, where
+# at each point) of length SAMPLE_RATE * SAMPLE_PERIOD.
+# Each float should be a value between -1 and +1 (0 = no sound).
 SAMPLE_RATE = 16000  # (Hz) sample rate
 SAMPLE_PERIOD = 1  # (seconds) length of a recorded audio sample
 
