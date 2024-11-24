@@ -68,6 +68,11 @@
           buildInputs = with pkgs; [cudaPackages.cudatoolkit libGLU libGL cudaPackages.cudnn cudaPackages.nccl linuxPackages.nvidia_x11] ++ (old.buildInputs or [ ]);
         });
 
+        numba = prev.numba.overrideAttrs (old:  {
+          buildInputs = with pkgs; [tbb cudaPackages.cudatoolkit libGLU libGL cudaPackages.cudnn cudaPackages.nccl linuxPackages.nvidia_x11] ++ (old.buildInputs or [ ]);
+        });
+
+
         numpy = prev.numpy.overrideAttrs (old:  {
           buildInputs = with pkgs; [ zlib ] ++ (old.buildInputs or [ ]);
           });
@@ -145,6 +150,7 @@
               uv git cudatoolkit
               linuxPackages.nvidia_x11
               ncurses5
+              tbb
               libGLU libGL
               xorg.libXi xorg.libXmu freeglut
               xorg.libXext xorg.libX11 xorg.libXv xorg.libXrandr zlib 
