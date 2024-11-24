@@ -63,11 +63,16 @@
         nvidia-cusolver-cu12 = prev.nvidia-cusolver-cu12.overrideAttrs (old:  {
           buildInputs = with pkgs; [cudatoolkit libGLU libGL] ++ (old.buildInputs or [ ]);
           });
+        tensorflow-gpu = pkgs.python312Packages.tensorflow-bin;
+        # torch = pkgs.python312Packages.pytorch-bin;
 
         torch = prev.torch.overrideAttrs (old:  {
           buildInputs = with pkgs; [cudaPackages.cudatoolkit libGLU libGL cudaPackages.cudnn cudaPackages.nccl linuxPackages.nvidia_x11] ++ (old.buildInputs or [ ]);
         });
 
+        tensorflow-io-gcs-filesystem = prev.tensorflow-io-gcs-filesystem.overrideAttrs (old:  {
+            buildInputs = with pkgs; [ libtensorflow ] ++ (old.buildInputs or [ ]);
+        });
 
         tbbpool = prev.tbbpool.overrideAttrs (old:  {
           buildInputs = with pkgs; [tbb gcc ] ++ (old.buildInputs or [ ]);
@@ -98,6 +103,9 @@
 
         pyaudio = prev.pyaudio.overrideAttrs (old:  {
           buildInputs = with pkgs; [ portaudio ] ++ (old.buildInputs or [ ]);
+          nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ final.resolveBuildSystem ({ 
+            setuptools = [ ];
+          });
         });
 
 
@@ -111,7 +119,7 @@
       };
 
       # Use Python 3.12 from nixpkgs
-      python = pkgs.python312;
+      python = pkgs.python311;
 
       # Construct package set
       pythonSet =
@@ -185,6 +193,7 @@
               cudaPackages.cudnn
               cudaPackages.nccl
               pyright
+              portaudio
             ] ++ [ virtualenv ];
           in
           pkgs.mkShell {
