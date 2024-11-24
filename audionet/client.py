@@ -54,7 +54,8 @@ class AudioSensorState:
         # circular buffer containing raw microphone data
         self.current_raw_samples = [] #np.ones(self.mic_sample_rate*self.desired_sample_period)
         self.current_raw_sample_position = 0; # index of oldest data in circular buffer (insert new data here)
-        self.current_features = [] # processed data, ready to be sent to ML model
+        self.current_audio = [] # sampled audio, also ready to be sent to ML model
+        self.current_features = [] # processed features, ready to be sent to ML model
         self.previous_sampling_time = time.time()
         self.previous_notification_time = time.time()
 
@@ -112,6 +113,9 @@ class AudioSensorState:
 
         mic_samples_per_period = self.mic_sample_rate*self.desired_sample_period
         self.current_raw_samples = np.ones(mic_samples_per_period)
+
+        self.current_audio = np.zeros(self.desired_sample_period*self.desired_sample_rate)*1.0
+        self.current_features = np.zeros(128)*1.0
 
         # data_buffer = np.zeros(samples_per_period)
 
@@ -203,8 +207,10 @@ class AudioSensorState:
         #print(final_data)
 
         # reformat sample
+
         resample_samples, _ = preprocess.resample_data(final_data, self.mic_sample_rate, params.SAMPLE_RATE)
         length_samples = preprocess.adjust_num_samples(resample_samples, params.SAMPLE_PERIOD*params.SAMPLE_RATE)
+        self.current_audio = length_samples
         self.current_features = preprocess.generate_something_like_mfcc(length_samples, 128)
 
         if current_time - self.previous_notification_time > 1: # notifications at least 1 second apart
@@ -228,4 +234,5 @@ if __name__ == "__main__":
     print("Running...")
     while True:
         state.run()
+        state.current_features
         #chart.update(state.current_features)
