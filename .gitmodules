@@ -1,0 +1,9 @@
+[submodule "data/drone_audio_dataset"]
+	path = data/drone_audio_dataset
+	url = git@github.com:saraalemadi/DroneAudioDataset.git
+[submodule "data/drone_detection_dataset"]
+	path = data/drone_detection_dataset
+	url = git@github.com:DroneDetectionThesis/Drone-detection-dataset.git
+[submodule "tfmodels"]
+	path = tfmodels
+	url = https://github.com/tensorflow/models.git
