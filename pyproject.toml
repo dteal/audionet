@@ -7,6 +7,8 @@ requires-python = ">=3.12"
 dependencies = [
     "resampy>=0.4.3",
     "scipy>=1.14.1",
+    "tensorflow>=2.18.0",
+    "tf-slim>=1.1.0",
 ]
 
 [build-system]
