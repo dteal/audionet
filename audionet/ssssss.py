@@ -69,8 +69,6 @@ def predict_drone(audio_data):
 
 # Create a Socket.IO client
 sio = socketio.Client(
-    logger=True,
-    engineio_logger=True,
     reconnection=True,
     reconnection_attempts=3,
     reconnection_delay=1,
@@ -100,6 +98,7 @@ buffer = []
 async def test_server():
     ass = client.AudioSensorState()
     ass.initialize_audio()
+    await asyncio.sleep(2)
     SERVER_URL = "https://e82e-98-97-27-170.ngrok-free.app"
 
     try:
@@ -116,7 +115,7 @@ async def test_server():
             prediction = predict_drone(ass.current_features)
             sio.emit("message", {"id": 0, "probability": prediction})
             # Keep the connection alive for a while to receive data
-            await asyncio.sleep(1)
+            await asyncio.sleep(2)
 
     except Exception as e:
         logger.error(f"Error: {str(e)}")

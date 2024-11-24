@@ -8,8 +8,8 @@ import joblib
 SAMPLE_RATE = 16000  # Sample rate for audio files
 NUM_MFCC = 128  # Number of MFCC features to extract
 MAX_PAD_LEN = 100  # Max length to pad/truncate MFCCs
-MODEL_PATH = "/home/user/dev/drone/drone_detection_model.h5"
-SCALER_PATH = "/home/user/dev/drone/scaler.pkl"
+MODEL_PATH = "drone_detection_model.h5"
+SCALER_PATH = "scaler.pkl"
 
 # Load the trained model
 model = load_model(MODEL_PATH)
