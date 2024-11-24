@@ -17,7 +17,7 @@ import time
 import sys
 import os
 # Get shared audio processing parameters
-sys.path.append(os.getcwd() + '/../..')
+sys.path.append(os.getcwd() + '/..')
 from audionet import params
 
 class AudioSensorState:
