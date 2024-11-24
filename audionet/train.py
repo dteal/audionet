@@ -122,24 +122,31 @@ def _get_examples_batch():
       [batch_size, num_classes] where each row is a multi-hot label vector that
       provides the labels for corresponding rows in features.
     """
-    sr = 44100  # Sampling rate.
 
     drone_files = get_wav_files("data/drone_audio_dataset/Binary_Drone_Audio/yes_drone")
-    drone_examples = np.array([])
+    drone_examples = None
     for drone_file in drone_files:
-        drone_examples = np.concatenate(
-            (drone_examples, input.waveform_to_examples(drone_file, sr))
-        )
+        if drone_examples is None:
+            drone_examples = input.wavfile_to_examples(drone_file)
+        else:
+            drone_examples = np.concatenate(
+                (drone_examples, input.wavfile_to_examples(drone_file))
+            )
+    assert drone_examples is not None
     drone_labels = np.array([[0, 1]] * drone_examples.shape[0])
 
     no_drone_files = get_wav_files(
         "data/drone_audio_dataset/Binary_Drone_Audio/unknown"
     )
-    no_drone_examples = np.array([])
+    no_drone_examples = None
     for no_drone_file in no_drone_files:
-        no_drone_examples = np.concatenate(
-            (no_drone_examples, input.waveform_to_examples(no_drone_file, sr))
-        )
+        if no_drone_examples is None:
+            no_drone_examples = input.wavfile_to_examples(no_drone_file)
+        else:
+            no_drone_examples = np.concatenate(
+                (no_drone_examples, input.wavfile_to_examples(no_drone_file))
+            )
+    assert no_drone_examples is not None
     no_drone_labels = np.array([[1, 0]] * no_drone_examples.shape[0])
 
     # Shuffle (example, label) pairs across all classes.
@@ -156,7 +163,6 @@ def _get_examples_batch():
 
 def main(_):
     with tf.Graph().as_default(), tf.Session() as sess:
-        saver = tf.train.Saver(max_to_keep=5)
         # Define VGGish.
         embeddings = audio_slim.define_slim(training=FLAGS.train_vggish)
 
@@ -202,6 +208,8 @@ def main(_):
         # Initialize all variables in the model, and then load the pre-trained
         # checkpoint.
         sess.run(tf.global_variables_initializer())
+
+        saver = tf.train.Saver(max_to_keep=5)
         # audio_slim.load_slim_checkpoint(sess, FLAGS.checkpoint)
         audio_slim.initialize_uniform_weights(sess)
 
@@ -215,7 +223,7 @@ def main(_):
             )
             print("Step %d: loss %g" % (num_steps, loss_value))
             # Save every N epochs
-            if epoch % save_frequency == 0:
+            if epoch > 0 and epoch % save_frequency == 0:
                 save_path = saver.save(
                     sess, "path/to/checkpoints/model.ckpt", global_step=epoch
                 )
