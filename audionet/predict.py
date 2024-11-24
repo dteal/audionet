@@ -1,36 +1,88 @@
-import tensorflow.compat.v1 as tf
 import numpy as np
-from tensorflow.core.protobuf import rewriter_config_pb2
-import audionet.params as params
-from audionet.preprocess.input import waveform_to_examples
-import audionet.preprocess.slim as slim
+import librosa
+import tensorflow as tf
+from keras.models import load_model
+import joblib
 
-tf.disable_eager_execution()
+# Parameters
+SAMPLE_RATE = 16000  # Sample rate for audio files
+NUM_MFCC = 128  # Number of MFCC features to extract
+MAX_PAD_LEN = 100  # Max length to pad/truncate MFCCs
+MODEL_PATH = "/home/user/dev/drone/drone_detection_model.h5"
+SCALER_PATH = "/home/user/dev/drone/scaler.pkl"
+
+# Load the trained model
+model = load_model(MODEL_PATH)
+
+# Load the scaler
+scaler = joblib.load(SCALER_PATH)
 
 
-class Daddy:
-    def __init__(self, checkpoint_path):
-        tf.Graph().as_default()
-        self.sess = tf.Session(
-            # config=tf.ConfigProto(
-            #     graph_options=tf.GraphOptions(
-            #         rewrite_options=rewriter_config_pb2.RewriterConfig(
-            #             disable_meta_optimizer=True
-            #         )
-            #     )
-            # )
+def predict_drone(audio_data):
+    """
+    Predicts whether the given 1-second audio data contains a drone sound.
+
+    Parameters:
+        audio_data (numpy.ndarray): 1D NumPy array containing audio samples at 16kHz.
+
+    Returns:
+        int: 1 if drone sound is detected, 0 otherwise.
+    """
+    # Check if audio data is 1 second long
+    if len(audio_data) != SAMPLE_RATE:
+        raise ValueError(
+            f"Audio data must be 1 second long ({SAMPLE_RATE} samples at 16kHz)."
         )
 
-        slim.define_slim()
-        slim.load_slim_checkpoint(self.sess, checkpoint_path)
+    # Extract MFCC features
+    mfcc = librosa.feature.mfcc(y=audio_data, sr=SAMPLE_RATE, n_mfcc=NUM_MFCC)
 
-    def forward(self, input_batch):
-        features_tensor = self.sess.graph.get_tensor_by_name(params.INPUT_TENSOR_NAME)
-        embedding_tensor = self.sess.graph.get_tensor_by_name(params.OUTPUT_TENSOR_NAME)
-        [embedding_batch] = self.sess.run(
-            [embedding_tensor], feed_dict={features_tensor: input_batch}
-        )
-        return embedding_batch
+    # Pad or truncate MFCCs to MAX_PAD_LEN
+    if mfcc.shape[1] < MAX_PAD_LEN:
+        pad_width = MAX_PAD_LEN - mfcc.shape[1]
+        mfcc = np.pad(mfcc, pad_width=((0, 0), (0, pad_width)), mode="constant")
+    else:
+        mfcc = mfcc[:, :MAX_PAD_LEN]
 
-    def predict(self, input_audio):
-        return self.forward(waveform_to_examples(input_audio, params.SAMPLE_RATE))
+    mfcc = mfcc.T  # Transpose to fit Conv1D input shape
+
+    # Normalize the MFCC features using the loaded scaler
+    mfcc_reshaped = mfcc.reshape(-1, NUM_MFCC)
+    mfcc_normalized = scaler.transform(mfcc_reshaped)
+    mfcc_normalized = mfcc_normalized.reshape(1, MAX_PAD_LEN, NUM_MFCC)
+
+    # Predict using the loaded model
+    prediction = model.predict(mfcc_normalized)
+    predicted_label = int(prediction[0][0] >= 0.5)
+
+    return predicted_label
+
+
+# Example usage:
+if __name__ == "__main__":
+    # Load a 1-second audio sample from a WAV file
+    import sys
+
+    if len(sys.argv) != 2:
+        print("Usage: python drone_detector.py path_to_1s_audio.wav")
+        sys.exit(1)
+
+    audio_file_path = sys.argv[1]
+
+    # Load the audio file
+    audio, sr = librosa.load(audio_file_path, sr=SAMPLE_RATE)
+
+    # Ensure the audio is exactly 1 second long
+    if len(audio) > SAMPLE_RATE:
+        audio = audio[:SAMPLE_RATE]
+    elif len(audio) < SAMPLE_RATE:
+        # Pad with zeros if shorter than 1 second
+        pad_width = SAMPLE_RATE - len(audio)
+        audio = np.pad(audio, (0, pad_width), mode="constant")
+
+    # Predict and print the result
+    result = predict_drone(audio)
+    if result == 1:
+        print("Drone sound detected.")
+    else:
+        print("No drone sound detected.")
