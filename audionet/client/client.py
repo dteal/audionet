@@ -14,26 +14,30 @@ import pyaudio      # audio processing; see https://people.csail.mit.edu/hubert/
 import wave         # wave file input
 import numpy as np
 import time
+import sys
+import os
 
 #################################################
 # AUDIO SYSTEM PARAMETERS
 #################################################
 
+# Get shared audio processing parameters
+sys.path.append(os.getcwd() + '/../..')
+from audionet import params
+
+sample_rate = params.SAMPLE_RATE # (Hz) sample rate
+sample_period = params.SAMPLE_PERIOD # (s) total sampling time
 # use 32-bit floats for all audio processing (hardcoded)
-sample_rate = 16000 # (Hz) audio signal sample rate (any input will be resampled to this rate before processing)
-detection_period = 1.0 # (s) the amount of audio data we will run through spectrogram / CNN at once
 
+samples_per_period = sample_rate*sample_period
 
-samples_per_period = sample_rate*detection_period
-
+print('Using sample rate {} kHz'.format(sample_rate/1000))
+print('Using sampling period {} s'.format(sample_period))
 
 # circular buffer containing all current audio samples
-# (continuously feed data into this buffer,
-# then extract detection_period worth of data when ready)
-
-data_buffer = np.zeros()
-
-
+# (continuously feed data into this buffer, then
+# extract detection_period worth of data when ready)
+data_buffer = np.zeros(samples_per_period)
 
 #################################################
 # AUDIO INPUT
